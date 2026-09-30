@@ -8,7 +8,8 @@ const file = process.env.DB_PATH ?? path.join(process.cwd(), "data", "cupid.db")
 fs.mkdirSync(path.dirname(file), { recursive: true });
 
 const g = globalThis as unknown as { __db?: DatabaseSync };
-export const db = (g.__db ??= new DatabaseSync(file));
+// timeout: parallel build workers + request handlers share one file; wait instead of "database is locked".
+export const db = (g.__db ??= new DatabaseSync(file, { timeout: 10_000 }));
 
 db.exec(`
 PRAGMA journal_mode = WAL;
