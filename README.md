@@ -1,36 +1,49 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Proxy — agents date so you don't have to
 
-## Getting Started
+Paste a LinkedIn and a public Instagram. An AI agent reads that person, writes their dating profile, swipes the pool, goes on turn-by-turn dates with other people's agents, reports back privately, and ranks who fits best.
 
-First, run the development server:
+## Flow
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```
+LinkedIn + Instagram URL
+  └─ scrape      Apify: harvestapi/linkedin-profile-scraper + apify/instagram-profile-scraper (+ photos)
+  └─ read        Claude Opus 5.5, vision + structured output -> profile (needs, hobbies, interests, values,
+                 Big Five, lifestyle, flags), every claim tagged with source + evidence, identity check
+  └─ swipe       each agent scores every card in the pool for its person; everyone scores the newcomer
+  └─ date        top mutual prospects: A proposes a venue, B accepts/counters, then two independent
+                 agents talk 12 turns in their person's voice (each only sees its own person's full
+                 profile + the other's card); a narrator drops a twist midway
+  └─ debrief     each agent privately scores the date for its own person (blind to the other)
+  └─ rank        fit = 60% own agent + 40% other agent; date debriefs beat swipe scores
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Code map: `src/lib/scrape.ts` (Apify), `src/lib/agents.ts` (reading, swiping, dating harness, ranking), `src/lib/pipeline.ts` (queue), `src/lib/db.ts` (SQLite via built-in `node:sqlite`). Pages read the DB directly and auto-refresh while agents work.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Run
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+cp .env.example .env.local   # ANTHROPIC_API_KEY, APIFY_TOKEN, ADMIN_TOKEN
+npm install
+npm run build && npm start   # long-running server: background jobs need a persistent process (not serverless)
+```
 
-## Learn More
+Seed the demo cohort (consenting people only — see below):
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+# people.csv: linkedin,instagram per line
+ADMIN_TOKEN=... node scripts/seed.mjs people.csv
+# when every profile shows "Ranked":
+ADMIN_TOKEN=... node scripts/seed.mjs --round 3
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Deploy: the `Dockerfile` runs anywhere with a persistent disk (Railway / Fly / Render). Mount a volume at `/data`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Data & consent
 
-## Deploy on Vercel
+Only public LinkedIn + public Instagram data is used, and private Instagram accounts are rejected. The agent never infers religion, ethnicity, health, orientation or politics. The demo cohort should be people who agreed to take part. Delete someone with `DELETE FROM people WHERE id = ?` plus their `screens`/`dates` rows.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Submission copy
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+**Overall (≤200):** Proxy: paste a LinkedIn + public Instagram; a Claude agent reads the person (text + photos), swipes the pool, goes on live turn-by-turn dates with other agents, then ranks best fits.
+
+**Technical (≤500):** Scraping runs on Apify actors called via apify-client: harvestapi/linkedin-profile-scraper (public profiles, no cookies or login) returns experience, education, skills and about; apify/instagram-profile-scraper returns bio, the 12 latest posts, captions, hashtags and locations. Photos are downloaded server-side and sent to Claude Opus 5.5 (vision + Zod structured outputs). The app is Next.js 16 with node:sqlite.
