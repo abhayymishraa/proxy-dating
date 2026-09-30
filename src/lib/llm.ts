@@ -4,11 +4,15 @@ import type { BetaMessageParam } from "@anthropic-ai/sdk/resources/beta/messages
 import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import type { ResponseInputContent, ResponseInputItem } from "openai/resources/responses/responses";
-import type { z } from "zod/v4";
+import { GoogleGenAI, ThinkingLevel, type Content, type Part } from "@google/genai";
+import { z } from "zod/v4";
 
-// Anthropic if its key is set, else OpenAI. Force with LLM_PROVIDER=anthropic|openai.
-const PROVIDER = process.env.LLM_PROVIDER ?? (process.env.ANTHROPIC_API_KEY ? "anthropic" : "openai");
-export const MODEL = process.env.LLM_MODEL ?? (PROVIDER === "openai" ? "gpt-5.6" : "claude-opus-5-5");
+// First provider with a key wins: Anthropic, then Gemini, then OpenAI. Force with LLM_PROVIDER.
+const GEMINI_KEY = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY;
+const PROVIDER = process.env.LLM_PROVIDER
+  ?? (process.env.ANTHROPIC_API_KEY ? "anthropic" : GEMINI_KEY ? "gemini" : "openai");
+const DEFAULT_MODEL = { anthropic: "claude-opus-5-5", gemini: "gemini-3.8-flash", openai: "gpt-5.6" };
+export const MODEL = process.env.LLM_MODEL ?? DEFAULT_MODEL[PROVIDER as keyof typeof DEFAULT_MODEL];
 
 type Effort = "low" | "medium" | "high";
 type Opts = { system: string; messages: BetaMessageParam[]; effort?: Effort };
@@ -89,6 +93,41 @@ async function openaiText(o: Opts) {
   return res.output_text.trim();
 }
 
+// ---------- Gemini ----------
+let gemini: GoogleGenAI | undefined;
+const LEVEL = { low: ThinkingLevel.LOW, medium: ThinkingLevel.MEDIUM, high: ThinkingLevel.HIGH };
+
+function toGemini(messages: BetaMessageParam[]): Content[] {
+  return messages.map((m) => ({
+    role: m.role === "assistant" ? "model" : "user",
+    parts: typeof m.content === "string" ? [{ text: m.content }] : m.content.flatMap((b): Part[] =>
+      b.type === "text" ? [{ text: b.text }]
+      : b.type === "image" && b.source.type === "base64" ? [{ inlineData: { mimeType: b.source.media_type, data: b.source.data } }]
+      : []),
+  }));
+}
+
+async function geminiCall(o: Opts, effort: Effort, extra: object) {
+  const res = await (gemini ??= new GoogleGenAI({ apiKey: GEMINI_KEY })).models.generateContent({
+    model: MODEL,
+    contents: toGemini(o.messages),
+    config: { systemInstruction: o.system, thinkingConfig: { thinkingLevel: LEVEL[o.effort ?? effort] }, ...extra },
+  });
+  if (!res.text) throw new Error(`Empty response (finish=${res.candidates?.[0]?.finishReason ?? res.promptFeedback?.blockReason})`);
+  return res.text;
+}
+
+async function geminiJSON<T extends z.ZodType>(o: Opts & { schema: T; maxTokens?: number }) {
+  const text = await geminiCall(o, "medium", {
+    responseMimeType: "application/json", responseJsonSchema: z.toJSONSchema(o.schema), maxOutputTokens: o.maxTokens ?? 16000,
+  });
+  return o.schema.parse(JSON.parse(text)) as z.infer<T>;
+}
+
+const geminiText = async (o: Opts) => (await geminiCall(o, "low", { maxOutputTokens: 4000 })).trim();
+
+const JSON_BY = { anthropic: anthropicJSON, gemini: geminiJSON, openai: openaiJSON };
+const TEXT_BY = { anthropic: anthropicText, gemini: geminiText, openai: openaiText };
 export const askJSON = <T extends z.ZodType>(o: Opts & { schema: T; maxTokens?: number }) =>
-  PROVIDER === "openai" ? openaiJSON(o) : anthropicJSON(o);
-export const askText = (o: Opts) => (PROVIDER === "openai" ? openaiText(o) : anthropicText(o));
+  JSON_BY[PROVIDER as keyof typeof JSON_BY](o) as Promise<z.infer<T>>;
+export const askText = (o: Opts) => TEXT_BY[PROVIDER as keyof typeof TEXT_BY](o);

@@ -25,7 +25,7 @@ export default function HowPage() {
         ))}
       </ol>
       <p className="mt-12 text-sm text-ink-soft border-t rule pt-4">
-        Stack: Next.js 16 (App Router) · {MODEL} (Anthropic or OpenAI SDK, structured outputs) · Apify · SQLite (node:sqlite). Only public data is used; ask to be removed and you will be.
+        Stack: Next.js 16 (App Router) · {MODEL} (Anthropic, Gemini or OpenAI SDK, structured outputs) · Apify · SQLite (node:sqlite). Only public data is used; ask to be removed and you will be.
       </p>
     </div>
   );
