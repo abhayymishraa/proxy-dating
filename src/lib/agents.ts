@@ -116,7 +116,7 @@ export async function goOnDate(a: PersonRow, b: PersonRow) {
     const cardA = card(a.id, A), cardB = card(b.id, B);
     const prop = await askJSON({
       system: persona(A),
-      messages: [{ role: "user", content: `You're asking ${B.name} out on a first date tonight on ${A.name}'s behalf. Their card: ${JSON.stringify(cardB)}\nPropose a specific venue + activity that suits BOTH people, and write your invite.` }],
+      messages: [{ role: "user", content: `You're asking ${B.name} out on a first date tonight on ${A.name}'s behalf. Their card: ${JSON.stringify(cardB)}\nPropose a specific venue + activity that suits BOTH people, and write the invite in first person as ${A.name} ("I", never "${A.name} would").` }],
       schema: VenueSchema, effort: "low",
     });
     const reply = await askJSON({
@@ -129,7 +129,7 @@ export async function goOnDate(a: PersonRow, b: PersonRow) {
     const lines: Line[] = [
       { speaker: "a", text: prop.message },
       { speaker: "b", text: reply.message },
-      { speaker: "narrator", text: `They meet at ${plan.venue}. ${plan.activity}.` },
+      { speaker: "narrator", text: `They meet: ${plan.venue}. ${plan.activity}` },
     ];
     dates.set(id, { status: "live", venue: JSON.stringify(venue), transcript: JSON.stringify(lines) });
     events.log(`${A.name} × ${B.name} are on a date: ${plan.venue}`, a.id, id);

@@ -40,7 +40,7 @@ export const ScreenSchema = z.object({
 });
 
 export const VenueSchema = z.object({
-  venue: z.string().describe("A specific kind of place, e.g. 'a bouldering gym in Bushwick, then ramen'"),
+  venue: z.string().describe("Short venue name, max 8 words, e.g. 'Bouldering gym in Bushwick, then ramen'"),
   activity: z.string(),
   why: z.string().describe("Why this suits both people"),
   message: z.string().describe("What you say to the other agent when proposing"),
