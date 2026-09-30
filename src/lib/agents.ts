@@ -1,5 +1,5 @@
 import type { BetaContentBlockParam, BetaMessageParam } from "@anthropic-ai/sdk/resources/beta/messages/messages";
-import { askJSON, askText } from "./claude";
+import { askJSON, askText } from "./llm";
 import { dates, events, people, screens, type Line, type PersonRow } from "./db";
 import { DebriefSchema, ProfileSchema, ReplySchema, ScreenSchema, VenueSchema, type Profile } from "./schemas";
 import type { Instagram } from "./scrape";
